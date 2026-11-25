@@ -90,7 +90,8 @@ async function pictureOf(
   maxRows: number,
 ): Promise<Picture> {
   const file = await absolute($, path);
-  const { mtimeMs, size } = await $.fs.stat(file);
+  const { kind, mtimeMs, size } = await $.fs.stat(file);
+  if (kind !== 'file') throw new Error(`${file} is not a file`);
   return render($, { kind: 'image', path: file, stamp: `${mtimeMs}-${size}`, maxColumns, maxRows });
 }
 

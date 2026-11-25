@@ -46,6 +46,20 @@ test('a kind that is not drawn, and a diagram too large, are errors', () => {
   assert.match(diagram(`graph LR\n${chain}`).error, /too large/);
 });
 
+const NOT_READ = [
+  'stateDiagram-v2\nA --> B\nnote right of A : waits',
+  'stateDiagram-v2\nstate A {\nstate B {\nC --> D\n}\n}',
+  'classDiagram\nnote for A "x"\nA --> B',
+  'classDiagram\nclass A["Label"]',
+  'erDiagram\n"Order Detail" ||--o{ ITEM : has',
+  'sequenceDiagram\nbox Blue\nparticipant A\nend\nA->>B: x',
+];
+for (const source of NOT_READ) {
+  test(`a line that would be dropped is an error: ${JSON.stringify(source)}`, () => {
+    assert.match(diagram(source).error, /cannot read/);
+  });
+}
+
 test('PostScript named as a picture is refused', () => {
   const path = join(scratch, 'ps.png');
   writeFileSync(path, '%!PS\n{} loop\n');

@@ -1,6 +1,6 @@
 # Third-party notices
 
-`bin/vendor/beautiful-mermaid.mjs` is built by `npm run build` from the versions pinned in `package-lock.json`. [`scripts/build.mjs`](scripts/build.mjs) sets one ELK layout option in beautiful-mermaid; the rest is unmodified:
+`bin/vendor/beautiful-mermaid.mjs` is built by `npm run build` from the versions pinned in `package-lock.json`. [`scripts/build.mjs`](scripts/build.mjs) sets how beautiful-mermaid's two ELK layouts break loops; the rest is unmodified:
 
 | Library           | Version | License                                     | Source                                        |
 | ----------------- | ------- | ------------------------------------------- | --------------------------------------------- |

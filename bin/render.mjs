@@ -52,13 +52,17 @@ function box(width, height, { cell, maxColumns, maxRows }) {
 async function mermaid({ source, colors, cell, maxColumns, maxRows }) {
   const { renderMermaidSVG } = await import('./vendor/beautiful-mermaid.mjs');
   const { flatten } = await import('./css.mjs');
+  const { readable } = await import('./readable.mjs');
   const { normalizeFlowchart, unmask } = await import('./flowchart.mjs');
   const body = source.replace(/^---\n[\s\S]*?\n---\n/, '').trim();
   const isFlowchart = /^(?:%%.*\n\s*)*(graph|flowchart)\b/i.test(body);
-  const readable = isFlowchart ? normalizeFlowchart(body) : body;
+  const drawable = isFlowchart ? normalizeFlowchart(body) : readable(body);
+  // Written order keeps a loop from moving the start, but misplaces groups.
+  const hasGroups = /^\s*subgraph\s|\{\s*$/m.test(drawable);
+  globalThis.cycleBreaking = isFlowchart && !hasGroups ? 'MODEL_ORDER' : 'GREEDY';
   const svg = unmask(
     flatten(
-      renderMermaidSVG(readable, {
+      renderMermaidSVG(drawable, {
         ...colors,
         border: colors.accent,
         muted: `color-mix(in srgb, ${colors.fg} ${MUTED_SHARE}, ${colors.bg})`,
@@ -68,12 +72,6 @@ async function mermaid({ source, colors, cell, maxColumns, maxRows }) {
       }),
     ),
   );
-  // A word the library could not read is left out of its drawing: then the source is the better view.
-  const drawn = svg.replace(/<[^>]*>/g, '');
-  const lost = [...readable.replace(/%%.*$/gm, '')].find(
-    (c) => /\p{L}/u.test(c) && c > '\u007f' && !drawn.includes(c),
-  );
-  if (lost) throw new Error(`mermaid: "${lost}" was not drawn`);
   const [, w, h] = /viewBox="[\d.-]+ [\d.-]+ ([\d.]+) ([\d.]+)"/.exec(svg);
   const scale = cell[1] / LABEL_LINE_UNITS;
   const fit = box(w * scale, h * scale, { cell, maxColumns, maxRows });
@@ -150,7 +148,7 @@ function image({ path, base64, stamp, cell, maxColumns, maxRows }) {
         ]);
     }
   }
-  const input = `${coderOf(headOf(source))}:${source}[0]`;
+  const input = `${coderOf(headOf(source))}:${source.replaceAll('%', '%%')}[0]`;
   const limits = ['-limit', 'width', MAX_INPUT_PIXELS, '-limit', 'height', MAX_INPUT_PIXELS];
   const size = run('magick', [
     ...limits,
