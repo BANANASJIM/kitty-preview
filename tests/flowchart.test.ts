@@ -1,14 +1,14 @@
 import { expect, test } from 'claude-code/testing';
 
-import { normalizeFlowchart, unmask } from '../bin/flowchart.mjs';
+import { normalizeFlowchart, unmask } from '../renderer/flowchart.mjs';
 
 const normal = (body: string) =>
-  unmask(normalizeFlowchart(`graph LR\n${body}`))
+  unmask(normalizeFlowchart(`graph LR\n${body}`).drawable)
     .split('\n')
     .slice(1);
 
 test('arrows need no spaces', () => {
-  expect(normal('A-->B;B-->|yes|C[c]')).toEqual(['A', 'B', 'A --> B', 'C[c]', 'B -->|yes| C']);
+  expect(normal('A-->B;B-->|yes|C[c]')).toEqual(['A', 'B', 'C[c]', 'A --> B', 'B -->|yes| C']);
 });
 
 test('a label between the dashes is the edge label', () => {
@@ -33,7 +33,9 @@ test('a label given after the first mention is drawn at it', () => {
 
 test('labels keep their brackets, slashes and asterisks', () => {
   expect(normal('A["f(x) [y] C:\\Users a/*.ts"]')).toEqual(['A[f(x) [y] C:\\Users a/*.ts]']);
-  expect(normalizeFlowchart('graph LR\nA["<b>x</b><br/>y"]')).toContain('A[<b>x</b><br>y]');
+  expect(normalizeFlowchart('graph LR\nA["<b>x</b><br/>y"]').drawable).toContain(
+    'A[<b>x</b><br>y]',
+  );
 });
 
 test('a node first mentioned outside its group is drawn in it', () => {
@@ -55,16 +57,39 @@ test('class names are made readable, and a fill gets a readable text color', () 
   ]);
 });
 
+test('other arrow ends and hidden links are marked', () => {
+  const { marks } = normalizeFlowchart('graph LR\nA --x B & C\nC o--o D ~~~ E\nA -- text --x E');
+  expect(
+    marks.map(({ from, to, start, end, isHidden }) => [from, to, start, end, isHidden]),
+  ).toEqual([
+    ['A', 'B', '', 'x', false],
+    ['A', 'C', '', 'x', false],
+    ['C', 'D', 'o', 'o', false],
+    ['D', 'E', '', '', true],
+    ['A', 'E', '', 'x', false],
+  ]);
+});
+
+test('links come after the groups, in the order written', () => {
+  expect(normal('A-->B\nsubgraph S\nB-->C\nend\nS-->A')).toEqual([
+    'subgraph S [S]',
+    'B',
+    'C',
+    'end',
+    'A',
+    'A --> B',
+    'B --> C',
+    'S --> A',
+  ]);
+});
+
 const THROWS = [
-  'A --x B --> C',
-  'A --o B',
-  'A -- no --x B',
-  'A ~~~ B',
   'A@{ shape: cyl }',
   'class A, B x',
-  'subgraph O\nsubgraph I\nA\nend\nsubgraph J\nB\nend\nA-->B\nend',
-  'subgraph O\nsubgraph I\nA\nend\nsubgraph J\nB\nend\nI-->J\nend',
   'subgraph S\nA\nend\nsubgraph T\nA\nend',
+  'S[x]\nsubgraph S\nA\nend',
+  'subgraph O\ndirection LR\nsubgraph I\nA\nend\nend\nX-->A',
+  'subgraph O\ndirection LR\nsubgraph I\nA\nend\nend\nI-->Y',
 ];
 for (const body of THROWS) {
   test(`what cannot be drawn right throws: ${JSON.stringify(body)}`, () => {

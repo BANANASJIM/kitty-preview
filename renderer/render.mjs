@@ -54,24 +54,28 @@ async function mermaid({ source, colors, cell, maxColumns, maxRows }) {
   const { flatten } = await import('./css.mjs');
   const { readable } = await import('./readable.mjs');
   const { normalizeFlowchart, unmask } = await import('./flowchart.mjs');
+  const { decorate, NOTHING } = await import('./decorate.mjs');
+  const flowchart = (text) => {
+    const { drawable, marks } = normalizeFlowchart(text);
+    return { drawable, extras: { ...NOTHING, marks } };
+  };
   const body = source
     .replace(/\s%%(?!\{).*$/gm, '')
     .replace(/^---\n[\s\S]*?\n---\n/, '')
     .trim();
   const isFlowchart = /^(?:%%.*\n\s*)*(graph|flowchart)\b/i.test(body);
-  const drawable = isFlowchart ? normalizeFlowchart(body) : readable(body);
-  const svg = unmask(
-    flatten(
-      renderMermaidSVG(drawable, {
-        ...colors,
-        border: colors.accent,
-        muted: `color-mix(in srgb, ${colors.fg} ${MUTED_SHARE}, ${colors.bg})`,
-        transparent: true,
-        padding: DIAGRAM_PADDING,
-        font: 'sans-serif',
-      }),
-    ),
-  );
+  const { drawable, extras } = isFlowchart ? flowchart(body) : readable(body);
+  const ends = new Set(extras.marks.map(({ start, end, isNote }) => `${start}${end}${isNote}`));
+  globalThis.keepLinksApart = ends.size > 1 || extras.marks.some(({ isNote }) => isNote);
+  const drawn = renderMermaidSVG(drawable, {
+    ...colors,
+    border: colors.accent,
+    muted: `color-mix(in srgb, ${colors.fg} ${MUTED_SHARE}, ${colors.bg})`,
+    transparent: true,
+    padding: DIAGRAM_PADDING,
+    font: 'sans-serif',
+  });
+  const svg = unmask(flatten(decorate(drawn, extras)));
   const [, w, h] = /viewBox="[\d.-]+ [\d.-]+ ([\d.]+) ([\d.]+)"/.exec(svg);
   const scale = cell[1] / LABEL_LINE_UNITS;
   const fit = box(w * scale, h * scale, { cell, maxColumns, maxRows });

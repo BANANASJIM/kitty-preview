@@ -33,7 +33,7 @@
 
 ## 原理
 
-`hooks/register.tsx` 负责画，`bin/render.mjs` 生成 PNG 并放在 `$XDG_RUNTIME_DIR/claude-kitty-preview`，`bin/probe.py` 向 kitty 查询颜色和单元格尺寸。不联网。
+`hooks/register.tsx` 负责画，`renderer/render.mjs` 生成 PNG 并放在 `$XDG_RUNTIME_DIR/claude-kitty-preview`，`renderer/probe.py` 向 kitty 查询颜色和单元格尺寸。不联网。
 
 消息里提到的文件会从磁盘读取来画卡片，卡片内容不会发给 Claude。
 
@@ -43,7 +43,7 @@
 npm ci --ignore-scripts
 npm test                 # 渲染、manifest 和 hooks；PATH 里要有 claude
 npm run format           # prettier --check
-npm run build            # 重新构建 bin/vendor，需要 bun
+npm run build            # 重新构建 renderer/vendor，需要 bun
 claude --plugin-dir .    # 加载这个 mod 开一个会话
 ```
 

@@ -57,7 +57,7 @@ function once<T>($: EngineInterface, key: string, work: () => Promise<T>): T | u
 let probing: Promise<Terminal> | undefined;
 function terminal($: EngineInterface): Promise<Terminal> {
   probing ??= $.process
-    .run(['kitty', '+launch', `${$.plugin.root}/bin/probe.py`])
+    .run(['kitty', '+launch', `${$.plugin.root}/renderer/probe.py`])
     .then(({ exitCode, stdout }) => (exitCode === 0 ? (JSON.parse(stdout) as Terminal) : {}))
     .catch(() => ({}));
   return probing;
@@ -66,7 +66,7 @@ function terminal($: EngineInterface): Promise<Terminal> {
 async function render($: EngineInterface, request: Record<string, unknown>): Promise<Picture> {
   const { cell, bg, fg, accent } = await terminal($);
   const { stdout, stderr, exitCode } = await $.process.run(
-    ['node', `${$.plugin.root}/bin/render.mjs`],
+    ['node', `${$.plugin.root}/renderer/render.mjs`],
     {
       stdin: JSON.stringify({ ...request, cell: cell ?? DEFAULT_CELL, colors: { bg, fg, accent } }),
     },

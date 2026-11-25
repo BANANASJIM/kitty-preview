@@ -1,4 +1,4 @@
-bin/vendor/
+renderer/vendor/
 node_modules/
 .claude-plugin/types/
 package-lock.json
