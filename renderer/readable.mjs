@@ -1,3 +1,5 @@
+import { NOTE_FONT, NOTE_LINES, nothing, widthOf } from './decorate.mjs';
+
 // The lines beautiful-mermaid reads, by kind: it skips any other without a word, so one means the source is shown.
 const NAME = '[\\p{L}\\p{N}_.~-]+';
 // Hyphens only inside a name, so an arrow's are its own.
@@ -89,6 +91,7 @@ function boxTitle(text) {
   const isColor = color && (color[1] === undefined || COLOR_NAMES.has(color[1].toLowerCase()));
   return isColor ? text.slice(color[0].length) : text;
 }
+const NAME_CHARACTER = 6;
 const said = (text) => text.trim().replaceAll('"', '”');
 
 // Lines rewritten into what the library reads, and what is drawn onto its SVG afterwards.
@@ -114,8 +117,15 @@ const REWRITES = {
         throw unreadable(text);
       } else {
         if (box) box.actors.push(actor[1]);
-        // The library hangs a note on the message before it.
-        if (/^note\s/i.test(text) && !hasMessage) throw unreadable(text);
+        // The library hangs a note on the message before it: the first of a diagram, a block or a branch gets
+        // one that is not drawn.
+        if (/^(?:loop|alt|opt|par|critical|break|else|and|end)\b/.test(text)) hasMessage = false;
+        const note = /^note\s+(?:left of|right of|over)\s+([^\s,:]+)/i.exec(text);
+        if (note && !hasMessage) {
+          out.push(`${note[1]}->>${note[1]}: note`);
+          extras.ends.push('hidden');
+          hasMessage = true;
+        }
         if (!KINDS.sequence.lines.at(-1).test(text)) {
           out.push(text);
           continue;
@@ -176,11 +186,46 @@ const REWRITES = {
     return out;
   },
 
-  class: (lines) =>
-    lines.flatMap((text) => {
+  class(lines, extras) {
+    let namespace;
+    let isMember = false;
+    return lines.flatMap((text) => {
+      if (isMember) {
+        isMember = text !== '}';
+        return [text];
+      }
       const kind = /^<<(\w+)>>\s+([\p{L}\p{N}_.]+)$/u.exec(text);
+      const note = /^note\s+(?:for\s+([\p{L}\p{N}_.]+)\s+)?"([^"]+)"$/u.exec(text);
+      const opened = /^namespace\s+(\S+)\s*\{$/.exec(text);
+      const declared = /^class\s+([\p{L}\p{N}_.-]+)/u.exec(text);
+      isMember = KINDS.class.block.test(text);
+      if (opened) {
+        if (namespace) throw unreadable(text);
+        namespace = { title: opened[1], ids: [] };
+        extras.namespaces.push(namespace);
+        return [];
+      }
+      if (namespace && text === '}') {
+        if (namespace.ids.length === 0) throw unreadable('namespace');
+        namespace = undefined;
+        return [];
+      }
+      if (namespace) {
+        if (!declared) throw unreadable(text);
+        namespace.ids.push(declared[1]);
+      }
+      if (note) {
+        const words = note[2].split(/\\n|<br\s*\/?>/i).map((part) => part.trim());
+        if (words.length > NOTE_LINES) throw unreadable(text);
+        // A class is as wide as its name.
+        const longest = Math.max(...words.map((part) => widthOf(part, NOTE_FONT)));
+        const id = `note_${extras.classNotes.size}_${'0'.repeat(Math.ceil(longest / NAME_CHARACTER))}`;
+        extras.classNotes.set(id, words);
+        return note[1] ? [`class ${id}`, `${note[1]} -- ${id}`] : [`class ${id}`];
+      }
       return kind ? [`class ${kind[2]} {`, `<<${kind[1]}>>`, '}'] : [text];
-    }),
+    });
+  },
 };
 
 // The library reads a left "}o" only the other way around, and a generic in a relation as another class.
@@ -200,7 +245,7 @@ export function readable(source) {
   const [name, kind] = Object.entries(KINDS).find(([, { header }]) => header.test(lines[0])) ?? [];
   if (!kind) throw new Error(`mermaid: "${lines[0]}" is not drawn`);
 
-  const extras = { marks: [], kinds: new Map(), ends: [], title: undefined, boxes: [] };
+  const extras = nothing();
   const rewritten = REWRITES[name]?.(lines.slice(1), extras) ?? lines.slice(1);
   let isMember = false;
   const out = rewritten.map((text) => {

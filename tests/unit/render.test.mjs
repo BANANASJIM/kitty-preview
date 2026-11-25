@@ -57,6 +57,11 @@ test('an ER relation that starts with }o keeps its entities', () => {
 });
 
 const MORE = {
+  'a note that opens a branch':
+    'sequenceDiagram\nA->>B: x\nalt ok\nNote over A: n\nB->>A: y\nelse bad\nNote over B: m\nB->>A: z\nend\nNote over A,B: after',
+  'a note before the first message': 'sequenceDiagram\nNote over A,B: first\nA->>B: x',
+  'class notes': 'classDiagram\nA --> B\nnote for A "a < b & c"\nnote "free"',
+  namespaces: 'classDiagram\nnamespace N {\nclass A {\n+int x\n}\nclass B\n}\nA --> B',
   'state notes and choices':
     'stateDiagram-v2\nstate c <<choice>>\nA --> c\nc --> B : yes\nnote right of A : waits\nnote left of B\ntwo\nlines\nend note',
   'participant boxes and a title':
@@ -81,13 +86,15 @@ test('a box with an actor is drawn, one around an outsider is not', () => {
   assert.match(diagram(outsider).error, /other participants/);
 });
 
+test('a namespace around other classes is an error', () => {
+  const source = 'classDiagram\nnamespace N {\nclass A\nclass C\n}\nA --> B\nB --> C';
+  assert.match(diagram(source).error, /around other classes/);
+});
+
 const NOT_READ = [
   'sequenceDiagram\nproxy-x->>B: hi',
   'sequenceDiagram\nbox Blue\nA->>B: x\nend',
-  'sequenceDiagram\nNote over A,B: first\nA->>B: x',
-  'classDiagram\nnamespace N {\nclass A\n}',
   'stateDiagram-v2\nstate A {\nstate B {\nC --> D\n}\n}',
-  'classDiagram\nnote for A "x"\nA --> B',
   'classDiagram\nclass A["Label"]',
   'erDiagram\n"Order Detail" ||--o{ ITEM : has',
 ];

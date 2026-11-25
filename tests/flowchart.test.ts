@@ -83,13 +83,18 @@ test('links come after the groups, in the order written', () => {
   ]);
 });
 
+test('a group keeps its direction unless a deep link from outside would be lost', () => {
+  expect(normal('subgraph O\ndirection TB\nA-->B\nend\nX-->A')).toContain('direction TB');
+  const deep = 'subgraph O\ndirection TB\nsubgraph I\nA\nend\nend\n';
+  expect(normal(`${deep}X-->A`)).not.toContain('direction TB');
+  expect(normal(`${deep}I-->Y`)).not.toContain('direction TB');
+});
+
 const THROWS = [
   'A@{ shape: cyl }',
   'class A, B x',
   'subgraph S\nA\nend\nsubgraph T\nA\nend',
   'S[x]\nsubgraph S\nA\nend',
-  'subgraph O\ndirection LR\nsubgraph I\nA\nend\nend\nX-->A',
-  'subgraph O\ndirection LR\nsubgraph I\nA\nend\nend\nI-->Y',
 ];
 for (const body of THROWS) {
   test(`what cannot be drawn right throws: ${JSON.stringify(body)}`, () => {
