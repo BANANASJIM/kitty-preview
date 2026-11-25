@@ -145,7 +145,7 @@ const pasted = new Map<string, string[]>();
 
 async function mediaOf($: EngineInterface, id: string): Promise<string | undefined> {
   let base64 = '';
-  for (let offset: number | undefined = 0; offset !== undefined;) {
+  for (let offset: number | undefined = 0; offset !== undefined; ) {
     const part = await $.prompt.media({ id, offset });
     if (part.type !== 'image') return undefined;
     base64 += part.base64;

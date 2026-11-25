@@ -24,7 +24,7 @@ function call(text, start) {
 
 function evaluate(value, vars) {
   let out = value.trim();
-  for (let m; (m = /var\(|color-mix\(/.exec(out));) {
+  for (let m; (m = /var\(|color-mix\(/.exec(out)); ) {
     const { args, end } = call(out, m.index);
     let replacement;
     if (m[0] === 'var(') {

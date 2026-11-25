@@ -15,10 +15,12 @@
     "printWidth": 100
   },
   "scripts": {
-    "test": "claude plugin test .",
-    "build": "bun build node_modules/beautiful-mermaid --target=node --minify --outfile=bin/vendor/beautiful-mermaid.mjs"
+    "build": "bun scripts/build.mjs",
+    "format": "prettier --check .",
+    "test": "node --test \"tests/unit/**/*.test.mjs\" && claude plugin validate . && claude plugin test ."
   },
   "devDependencies": {
-    "beautiful-mermaid": "1.1.3"
+    "beautiful-mermaid": "1.1.3",
+    "prettier": "3.6.2"
   }
 }
