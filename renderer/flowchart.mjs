@@ -235,14 +235,11 @@ export function normalizeFlowchart(source) {
     return out;
   }
 
-  // A group with its own direction is laid out apart, and a link is followed across one border only.
-  const isApart = root.groups.some((group) => group.settings.length > 0);
   const around = (id) => owners.get(id) ?? groups.get(id);
   const isLost = (from, to) =>
     around(from) !== around(to) && [from, to].some((id) => (around(id)?.depth ?? 0) > 1);
 
-  const marks = [];
-  function link(parts) {
+  function linksOf(parts) {
     const sides = [[]];
     const links = [];
     for (const part of parts) {
@@ -252,11 +249,37 @@ export function normalizeFlowchart(source) {
         sides.push([]);
       }
     }
+    return { sides, links };
+  }
+
+  // A group with its own direction is laid out apart, and a link is followed across one border only. Like
+  // Mermaid, such a group gives its direction up where what is in it is linked to the outside.
+  let declarations = declare(root);
+  const isApart = () => root.groups.some((group) => group.settings.length > 0);
+  const isInside = (group, id) =>
+    owners.has(id) ? holds(group, owners.get(id)) : group.id !== id && holds(group, groups.get(id));
+  const pairs = written.flatMap((parts) => {
+    const { sides } = linksOf(parts);
+    return sides.slice(1).flatMap((to, i) => sides[i].flatMap((a) => to.map((b) => [a.id, b.id])));
+  });
+  if (isApart() && pairs.some(([from, to]) => isLost(from, to))) {
+    for (const group of groups.values()) {
+      const isCrossed = pairs.some(([a, b]) => isInside(group, a) !== isInside(group, b));
+      if (isCrossed) group.settings = [];
+    }
+    owners.clear();
+    declarations = declare(root);
+    const lost = isApart() && pairs.find(([from, to]) => isLost(from, to));
+    if (lost) throw unreadable(`${lost[0]} to ${lost[1]}`);
+  }
+
+  const marks = [];
+  function link(parts) {
+    const { sides, links } = linksOf(parts);
     const names = (side) => side.map((part) => `${part.id}${part.suffix}`).join(' & ');
     links.forEach(({ mark }, i) => {
       for (const from of sides[i])
         for (const to of sides[i + 1]) {
-          if (isApart && isLost(from.id, to.id)) throw unreadable(`${from.raw} to ${to.raw}`);
           marks.push({ from: from.id, to: to.id, ...mark });
         }
     });
@@ -270,7 +293,6 @@ export function normalizeFlowchart(source) {
     ];
   }
 
-  const declarations = declare(root);
   const drawable = [
     `${header[1]} ${header[2] ?? 'TD'}`,
     ...declarations,

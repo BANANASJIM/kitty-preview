@@ -54,10 +54,10 @@ async function mermaid({ source, colors, cell, maxColumns, maxRows }) {
   const { flatten } = await import('./css.mjs');
   const { readable } = await import('./readable.mjs');
   const { normalizeFlowchart, unmask } = await import('./flowchart.mjs');
-  const { decorate, NOTHING } = await import('./decorate.mjs');
+  const { decorate, nothing } = await import('./decorate.mjs');
   const flowchart = (text) => {
     const { drawable, marks } = normalizeFlowchart(text);
-    return { drawable, extras: { ...NOTHING, marks } };
+    return { drawable, extras: { ...nothing(), marks } };
   };
   const body = source
     .replace(/\s%%(?!\{).*$/gm, '')
