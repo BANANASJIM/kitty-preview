@@ -1,5 +1,5 @@
-// beautiful-mermaid's flowchart parser drops what it cannot read without a word, and lays some nesting out
-// wrong. Rewrite a flowchart into the subset it draws right, or throw, so the source is shown instead.
+// beautiful-mermaid's flowchart parser drops what it cannot read without a word, and knows one kind of
+// arrow end. Rewrite a flowchart into the subset it draws right, or throw, so the source is shown instead.
 const ID = /^[\p{L}\p{N}_]+(?:[.-][\p{L}\p{N}_]+)*/u;
 const SHAPES = [
   ['(((', [')))']],
@@ -15,13 +15,10 @@ const SHAPES = [
   ['{', ['}']],
   ['>', [']']],
 ];
-const CROSS_OR_CIRCLE = '(?![xo]\\s)';
-const ARROW = new RegExp(
-  `^(<?)(?:(-{2,})>|(={2,})>|(-\\.+-)>|(-{3,})|(={3,})|(-\\.+-))${CROSS_OR_CIRCLE}\\s*(?:\\|([^|]*)\\|)?`,
-);
-const TEXT_ARROW = new RegExp(
-  `^(<?)(--|==|-\\.)${CROSS_OR_CIRCLE}\\s*([^\\s>|.=-].*?)\\s*(-{2,}>?|={2,}>?|\\.+->?)(?!>)${CROSS_OR_CIRCLE}`,
-);
+const ARROW =
+  /^([<xo]?)(?:(-{2,})([>xo])|(={2,})([>xo])|(-\.+-)([>xo]?)|(-{3,})|(={3,})|(~{3,}))\s*(?:\|([^|]*)\|)?/;
+const TEXT_ARROW =
+  /^([<xo]?)(--|==|-\.)\s*([^\s>|.=-].*?)\s*(?:(-{2,}|={2,}|\.+-)([>xo])|(-{3,}|={3,}|\.+-))(?=[\s\p{L}\p{N}_]|$)/u;
 const HEADER = /^(graph|flowchart)(?:\s+(TD|TB|LR|BT|RL))?\s*;?$/i;
 const SUBGRAPH_NAMED = /^([\p{L}\p{N}_.-]+)\s*\[(.+)\]$/u;
 const RESERVED = /^(subgraph|style|class|classDef|linkStyle|direction|click|end)(\s|$)/;
@@ -119,7 +116,7 @@ export function normalizeFlowchart(source) {
         return rest === '' ? [parts] : [parts, ...statements(rest)];
       }
       if (rest.startsWith('&')) {
-        parts.push(' & ');
+        parts.push({});
         take(1);
         continue;
       }
@@ -127,18 +124,20 @@ export function normalizeFlowchart(source) {
       const text = arrow ? undefined : TEXT_ARROW.exec(rest);
       if (!arrow && !text) throw unreadable(rest);
       const start = (arrow ?? text)[1];
-      const drawn = arrow ? arrow[0].replace(/\|[^|]*\|$/, '').trim() : text[4];
-      const kind = arrow
-        ? (arrow[2] ?? arrow[5]) !== undefined
-          ? '-'
-          : (arrow[3] ?? arrow[6]) !== undefined
-            ? '='
-            : '.'
-        : { '--': '-', '==': '=', '-.': '.' }[text[2]];
-      const words = arrow ? arrow[8] : text[3];
+      const body = arrow
+        ? (arrow[2] ?? arrow[4] ?? arrow[6] ?? arrow[8] ?? arrow[9] ?? arrow[10])
+        : text[2];
+      const end = arrow ? (arrow[3] ?? arrow[5] ?? arrow[7] ?? '') : (text[5] ?? '');
+      const words = arrow ? arrow[11] : text[3];
+      const kind = body.includes('.') ? '.' : body[0] === '=' ? '=' : '-';
       const ops = { '-': ['---', '-->'], '=': ['===', '==>'], '.': ['-.-', '-.->'] }[kind];
-      const said = words?.trim() ? `|${label(words)}|` : '';
-      parts.push(` ${start}${ops[drawn.endsWith('>') ? 1 : 0]}${said} `);
+      // The library's only end is the arrow: the others are drawn over it.
+      if (start !== '' && end === '') throw unreadable(rest);
+      parts.push({
+        link: ` ${start === '' ? '' : '<'}${ops[end === '' ? 0 : 1]}`,
+        label: words?.trim() ? `|${label(words)}|` : '',
+        mark: { start, end, isHidden: body[0] === '~' },
+      });
       take((arrow ?? text)[0].length);
     }
   }
@@ -155,8 +154,8 @@ export function normalizeFlowchart(source) {
   const groups = new Map();
   const styles = [];
   const linkStyles = [];
+  const written = [];
   const stack = [root];
-  let isReordered = false;
   for (const raw of lines.slice(1)) {
     const line = raw.replace(/\s*;$/, '');
     const here = stack[stack.length - 1];
@@ -179,7 +178,6 @@ export function normalizeFlowchart(source) {
       };
       if (groups.has(group.id)) throw unreadable(line);
       groups.set(group.id, group);
-      if (here.body.length > 0) isReordered = true;
       here.groups.push(group);
       stack.push(group);
     } else if (line === 'end') {
@@ -200,74 +198,85 @@ export function normalizeFlowchart(source) {
     } else if (RESERVED.test(line)) {
       throw unreadable(line);
     } else {
-      here.body.push(...statements(line));
+      const read = statements(line);
+      here.body.push(...read);
+      written.push(...read);
     }
   }
   if (stack.length !== 1) throw unreadable('a subgraph without its end');
 
-  // A node belongs to the group that mentions it, so groups are written ahead of what surrounds them.
-  const isNested = [...groups.values()].some((group) => group.depth > 1);
+  // A node belongs to the group that mentions it, so groups are declared ahead of what surrounds them. The
+  // links come last, in the order written: they may name a group, and linkStyle counts them.
   const owners = new Map();
   const holds = (group, inner) =>
     group === inner || group.groups.some((child) => holds(child, inner));
 
-  function checkEdges(parts) {
-    const sides = [[]];
-    for (const part of parts) {
-      if (typeof part !== 'string') sides[sides.length - 1].push(part.id);
-      else if (part !== ' & ') sides.push([]);
-    }
-    for (let i = 1; i < sides.length; i++) {
-      for (const from of sides[i - 1]) {
-        for (const to of sides[i]) {
-          const [a, b] = [owners.get(from), owners.get(to)];
-          const isDeep = (a?.depth ?? 0) > 1 || (b?.depth ?? 0) > 1;
-          if (a !== b && isDeep) throw unreadable(`${from} to ${to}, across nested subgraphs`);
-        }
-      }
-    }
-  }
-
-  function write(group) {
+  function declare(group) {
     const out = [
       ...group.settings,
-      ...group.groups.flatMap((inner) => [inner.opening, ...write(inner), 'end']),
+      ...group.groups.flatMap((inner) => [inner.opening, ...declare(inner), 'end']),
     ];
-    for (const parts of group.body) {
-      for (const part of parts) {
-        if (typeof part === 'string') continue;
-        if (groups.has(part.id)) {
-          if (group !== root || isNested || shapes.has(part.id)) throw unreadable(part.raw);
-          continue;
-        }
-        const owner = owners.get(part.id);
-        if (owner === undefined) {
-          owners.set(part.id, group);
-          // Declared alone: two shapes on one line can be read as one.
-          const shape = shapes.get(part.id) ?? (part.id === part.raw ? '' : `[${mask(part.raw)}]`);
-          out.push(`${part.id}${shape}`);
-        } else if (!holds(group, owner)) {
-          throw unreadable(`${part.raw}, in two subgraphs`);
-        }
+    for (const part of group.body.flat()) {
+      if (part.id === undefined) continue;
+      if (groups.has(part.id)) {
+        if (shapes.has(part.id)) throw unreadable(part.raw);
+        continue;
       }
-      checkEdges(parts);
-      if (parts.length > 1 || parts[0].suffix !== '') {
-        out.push(
-          parts
-            .map((part) => (typeof part === 'string' ? part : `${part.id}${part.suffix}`))
-            .join(''),
-        );
+      const owner = owners.get(part.id);
+      if (owner === undefined) {
+        owners.set(part.id, group);
+        // Declared alone: two shapes on one line can be read as one.
+        const shape = shapes.get(part.id) ?? (part.id === part.raw ? '' : `[${mask(part.raw)}]`);
+        out.push(`${part.id}${shape}`);
+      } else if (!holds(group, owner)) {
+        throw unreadable(`${part.raw}, in two subgraphs`);
       }
     }
     return out;
   }
 
-  const body = write(root);
-  return [
+  // A group with its own direction is laid out apart, and a link is followed across one border only.
+  const isApart = root.groups.some((group) => group.settings.length > 0);
+  const around = (id) => owners.get(id) ?? groups.get(id);
+  const isLost = (from, to) =>
+    around(from) !== around(to) && [from, to].some((id) => (around(id)?.depth ?? 0) > 1);
+
+  const marks = [];
+  function link(parts) {
+    const sides = [[]];
+    const links = [];
+    for (const part of parts) {
+      if (part.id !== undefined) sides.at(-1).push(part);
+      else if (part.link !== undefined) {
+        links.push(part);
+        sides.push([]);
+      }
+    }
+    const names = (side) => side.map((part) => `${part.id}${part.suffix}`).join(' & ');
+    links.forEach(({ mark }, i) => {
+      for (const from of sides[i])
+        for (const to of sides[i + 1]) {
+          if (isApart && isLost(from.id, to.id)) throw unreadable(`${from.raw} to ${to.raw}`);
+          marks.push({ from: from.id, to: to.id, ...mark });
+        }
+    });
+    if (links.length === 0 && sides[0].every((part) => part.suffix === '')) return [];
+    return [
+      sides.reduce(
+        (text, side, i) =>
+          text + (i ? `${links[i - 1].link}${links[i - 1].label} ` : '') + names(side),
+        '',
+      ),
+    ];
+  }
+
+  const declarations = declare(root);
+  const drawable = [
     `${header[1]} ${header[2] ?? 'TD'}`,
-    ...body,
+    ...declarations,
+    ...written.flatMap(link),
     ...styles,
-    // Links are counted in the order written, which moving the groups changes.
-    ...(isReordered ? [] : linkStyles),
+    ...linkStyles,
   ].join('\n');
+  return { drawable, marks };
 }

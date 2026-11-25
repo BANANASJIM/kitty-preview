@@ -23,6 +23,6 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y librsvg2-bin fonts-noto-cjk
       - run: npm ci --ignore-scripts
       - run: npm run format
-      - run: npm run build && git diff --exit-code bin/vendor
+      - run: npm run build && git diff --exit-code renderer/vendor
       - run: npm install -g @anthropic-ai/claude-code
       - run: npm test

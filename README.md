@@ -33,7 +33,7 @@ At the prompt of a Claude Code session:
 
 ## How it works
 
-`hooks/register.tsx` draws the rows. `bin/render.mjs` makes the PNGs and keeps them in `$XDG_RUNTIME_DIR/claude-kitty-preview`. `bin/probe.py` asks kitty for its colors and cell size. Nothing is sent over the network.
+`hooks/register.tsx` draws the rows. `renderer/render.mjs` makes the PNGs and keeps them in `$XDG_RUNTIME_DIR/claude-kitty-preview`. `renderer/probe.py` asks kitty for its colors and cell size. Nothing is sent over the network.
 
 Files a message names are read from disk to draw their cards. What a card shows is not sent to Claude.
 
@@ -43,7 +43,7 @@ Files a message names are read from disk to draw their cards. What a card shows 
 npm ci --ignore-scripts
 npm test                 # renderer, manifest and hooks; needs `claude` on PATH
 npm run format           # prettier --check
-npm run build            # rebuild bin/vendor, needs bun
+npm run build            # rebuild renderer/vendor, needs bun
 claude --plugin-dir .    # a session with the mod loaded
 ```
 

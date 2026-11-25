@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-const RENDER = fileURLToPath(new URL('../../bin/render.mjs', import.meta.url));
+const RENDER = fileURLToPath(new URL('../../renderer/render.mjs', import.meta.url));
 const FRAME = { cell: [10, 22], maxColumns: 60, maxRows: 40 };
 const COLORS = { bg: '#101010', fg: '#e0e0e0', accent: '#80d0d0' };
 const scratch = mkdtempSync(join(tmpdir(), 'kitty-preview-'));
@@ -56,16 +56,40 @@ test('an ER relation that starts with }o keeps its entities', () => {
   assert.equal(diagram('erDiagram\nB }o--|| A : x').rows, rows);
 });
 
+const MORE = {
+  'state notes and choices':
+    'stateDiagram-v2\nstate c <<choice>>\nA --> c\nc --> B : yes\nnote right of A : waits\nnote left of B\ntwo\nlines\nend note',
+  'participant boxes and a title':
+    'sequenceDiagram\ntitle Login\nbox Aqua Front\nparticipant A\nend\nA-xB: lost',
+  'links across nested groups':
+    'graph LR\nsubgraph O\nsubgraph I\nA\nend\nsubgraph J\nB\nend\nA-->B\nI-->J\nend\nC-->A',
+  'class annotations': 'classDiagram\n<<interface>> Shape\nShape <|.. Circle',
+};
+for (const [what, source] of Object.entries(MORE)) {
+  test(`${what} are drawn`, () => assert.equal(diagram(source).error, undefined));
+}
+
+test('a title is drawn as it is written', () => {
+  const title = `$& <b> & "x" fill="var(--bg)"`;
+  assert.equal(diagram(`sequenceDiagram\ntitle ${title}\nA->>B: x`).error, undefined);
+});
+
+test('a box with an actor is drawn, one around an outsider is not', () => {
+  const boxed = 'sequenceDiagram\nbox Backend Services\nactor U\nend\nparticipant A\nU->>A: x';
+  assert.equal(diagram(boxed).error, undefined);
+  const outsider = 'sequenceDiagram\nA->>B: x\nbox Q\nparticipant A\nparticipant C\nend\nB->>C: y';
+  assert.match(diagram(outsider).error, /other participants/);
+});
+
 const NOT_READ = [
+  'sequenceDiagram\nproxy-x->>B: hi',
+  'sequenceDiagram\nbox Blue\nA->>B: x\nend',
   'sequenceDiagram\nNote over A,B: first\nA->>B: x',
-  'sequenceDiagram\nA-xB: lost',
   'classDiagram\nnamespace N {\nclass A\n}',
-  'stateDiagram-v2\nA --> B\nnote right of A : waits',
   'stateDiagram-v2\nstate A {\nstate B {\nC --> D\n}\n}',
   'classDiagram\nnote for A "x"\nA --> B',
   'classDiagram\nclass A["Label"]',
   'erDiagram\n"Order Detail" ||--o{ ITEM : has',
-  'sequenceDiagram\nbox Blue\nparticipant A\nend\nA->>B: x',
 ];
 for (const source of NOT_READ) {
   test(`a line that would be dropped is an error: ${JSON.stringify(source)}`, () => {
