@@ -1,0 +1,5 @@
+{
+  "name": "kitty-preview",
+  "owner": { "name": "BANANASJIM" },
+  "plugins": [{ "name": "kitty-preview", "source": "./" }]
+}

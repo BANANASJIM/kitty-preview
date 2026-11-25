@@ -1,0 +1,9 @@
+{
+  "name": "kitty-preview",
+  "version": "0.1.0",
+  "description": "Mermaid diagrams, images and file previews drawn inside Claude Code through the kitty graphics protocol.",
+  "license": "MIT",
+  "author": { "name": "BANANASJIM" },
+  "repository": "https://github.com/BANANASJIM/kitty-preview",
+  "homepage": "https://github.com/BANANASJIM/kitty-preview"
+}
