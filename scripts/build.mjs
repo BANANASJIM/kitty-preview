@@ -1,15 +1,9 @@
-// Bundles beautiful-mermaid into bin/vendor, with one change: how a loop is broken. ELK's default moves a
-// diagram's start below what loops back to it. A group's inside starts where its edges come in, the whole as
-// bin/render.mjs chooses.
-const PATCHES = [
-  {
-    find: /(["']elk\.layered\.considerModelOrder\.strategy["']\s*:\s*["']NODES_AND_EDGES["'])/g,
-    add: '"elk.layered.cycleBreaking.strategy":globalThis.cycleBreaking',
-  },
-  {
-    find: /(["']elk\.layered\.nodePlacement\.bk\.fixedAlignment["']\s*:\s*["']BALANCED["'])(?=\s*,\s*["']elk\.layered\.spacing\.nodeNodeBetweenLayers["'])/g,
-    add: '"elk.layered.cycleBreaking.strategy":"DEPTH_FIRST"',
-  },
+// Bundles beautiful-mermaid into bin/vendor, with one change: ELK's default way of breaking a loop moves a
+// diagram's start below what loops back to it, so loops are broken from the start instead.
+const DEPTH_FIRST = '$1,"elk.layered.cycleBreaking.strategy":"DEPTH_FIRST"';
+const LAYOUTS = [
+  /(["']elk\.layered\.considerModelOrder\.strategy["']\s*:\s*["']NODES_AND_EDGES["'])/g,
+  /(["']elk\.layered\.nodePlacement\.bk\.fixedAlignment["']\s*:\s*["']BALANCED["'])(?=\s*,\s*["']elk\.layered\.spacing\.nodeNodeBetweenLayers["'])/g,
 ];
 
 const result = await Bun.build({
@@ -18,9 +12,9 @@ const result = await Bun.build({
   minify: true,
 });
 let code = await result.outputs[0].text();
-for (const { find, add } of PATCHES) {
-  const found = code.match(find)?.length ?? 0;
+for (const layout of LAYOUTS) {
+  const found = code.match(layout)?.length ?? 0;
   if (found !== 1) throw new Error(`expected one layout to change, found ${found}`);
-  code = code.replace(find, `$1,${add}`);
+  code = code.replace(layout, DEPTH_FIRST);
 }
 await Bun.write('bin/vendor/beautiful-mermaid.mjs', code);

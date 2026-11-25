@@ -1,5 +1,7 @@
 // The lines beautiful-mermaid reads, by kind: it skips any other without a word, so one means the source is shown.
 const NAME = '[\\p{L}\\p{N}_.~-]+';
+// Hyphens only inside a name, so an arrow's are its own.
+const SENDER = '[\\p{L}\\p{N}_.]+(?:-[\\p{L}\\p{N}_.]+)*';
 const line = (pattern) => new RegExp(`^(?:${pattern})$`, 'u');
 
 const KINDS = {
@@ -8,11 +10,11 @@ const KINDS = {
     lines: [
       line(`(?:participant|actor)\\s+${NAME}(?:\\s+as\\s+.+)?`),
       line(`[Nn]ote\\s+(?:left of|right of|over)\\s+${NAME}(?:\\s*,\\s*${NAME})?\\s*:.+`),
-      line('(?:loop|alt|opt|par|critical|break|rect)(?:\\s.*)?'),
+      line('(?:loop|alt|opt|par|critical|break)(?:\\s.*)?'),
       line('(?:else|and)(?:\\s.*)?'),
       line('end'),
       line(`(?:activate|deactivate)\\s+${NAME}`),
-      line(`[\\p{L}\\p{N}_.]+\\s*(?:-->>|->>|--\\)|-\\)|--x|-x|-->|->)\\s*[+-]?${NAME}\\s*:\\s*.+`),
+      line(`${SENDER}\\s*(?:-->>|->>|--\\)|-\\)|-->|->)\\s*[+-]?${NAME}\\s*:\\s*.+`),
     ],
   },
   state: {
@@ -32,7 +34,6 @@ const KINDS = {
     header: /^classDiagram(?:-v2)?$/,
     lines: [
       line('direction\\s+(?:TD|TB|LR|BT|RL)'),
-      line(`namespace\\s+${NAME}\\s*\\{`),
       line(`class\\s+${NAME}`),
       line(`class\\s+${NAME}\\s*\\{\\s*<<\\w+>>\\s*\\}`),
       line(`${NAME}\\s*:\\s*.+`),
@@ -63,6 +64,16 @@ const KINDS = {
 
 const MESSAGE = /^([^:]*?(?:>>|\)|x|>)\s*[+-]?[^:]*:\s*)(.+)$/;
 
+function rewritten(kind, text, isMember, number) {
+  if (number !== undefined)
+    return text.replace(MESSAGE, (_, head, said) => `${head}${number}. ${said}`);
+  // The library reads a left "}o" only the other way around, and a generic in a relation as another class.
+  if (kind === KINDS.er && !isMember) return text.replace(/^(\S+\s+)\}([o|])(?=--|\.\.)/, '$1$2{');
+  if (kind === KINDS.class && !isMember && !text.startsWith('class '))
+    return text.replace(/~[^~\s]*~/g, '');
+  return text;
+}
+
 export function readable(source) {
   const lines = source
     .split('\n')
@@ -75,6 +86,7 @@ export function readable(source) {
   let isMember = false;
   let depth = 0;
   let number;
+  let hasMessage = false;
   for (const text of lines.slice(1)) {
     const unreadable = new Error(`mermaid: cannot read "${text}"`);
     if (isMember) {
@@ -92,9 +104,12 @@ export function readable(source) {
       depth += text.endsWith('{') ? 1 : text === '}' ? -1 : 0;
       if (depth > 1) throw unreadable;
     }
-    const isMessage = number !== undefined && kind.lines.at(-1).test(text);
+    const isMessage = kind === KINDS.sequence && kind.lines.at(-1).test(text);
+    if (isMessage) hasMessage = true;
+    // The library hangs a note on the message before it.
+    if (kind === KINDS.sequence && /^note\s/i.test(text) && !hasMessage) throw unreadable;
     out.push(
-      isMessage ? text.replace(MESSAGE, (_, head, said) => `${head}${number++}. ${said}`) : text,
+      rewritten(kind, text, isMember, isMessage && number !== undefined ? number++ : undefined),
     );
   }
   return out.join('\n');

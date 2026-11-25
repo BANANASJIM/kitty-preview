@@ -46,7 +46,20 @@ test('a kind that is not drawn, and a diagram too large, are errors', () => {
   assert.match(diagram(`graph LR\n${chain}`).error, /too large/);
 });
 
+test('comments after a line, a one-line header and hyphenated senders are read', () => {
+  assert.equal(diagram('graph TD;A-->B %% why').error, undefined);
+  assert.equal(diagram('sequenceDiagram\nweb-app->>api-server: go').error, undefined);
+});
+
+test('an ER relation that starts with }o keeps its entities', () => {
+  const { rows } = diagram('erDiagram\nA ||--o{ B : x');
+  assert.equal(diagram('erDiagram\nB }o--|| A : x').rows, rows);
+});
+
 const NOT_READ = [
+  'sequenceDiagram\nNote over A,B: first\nA->>B: x',
+  'sequenceDiagram\nA-xB: lost',
+  'classDiagram\nnamespace N {\nclass A\n}',
   'stateDiagram-v2\nA --> B\nnote right of A : waits',
   'stateDiagram-v2\nstate A {\nstate B {\nC --> D\n}\n}',
   'classDiagram\nnote for A "x"\nA --> B',

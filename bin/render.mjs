@@ -54,12 +54,12 @@ async function mermaid({ source, colors, cell, maxColumns, maxRows }) {
   const { flatten } = await import('./css.mjs');
   const { readable } = await import('./readable.mjs');
   const { normalizeFlowchart, unmask } = await import('./flowchart.mjs');
-  const body = source.replace(/^---\n[\s\S]*?\n---\n/, '').trim();
+  const body = source
+    .replace(/\s%%(?!\{).*$/gm, '')
+    .replace(/^---\n[\s\S]*?\n---\n/, '')
+    .trim();
   const isFlowchart = /^(?:%%.*\n\s*)*(graph|flowchart)\b/i.test(body);
   const drawable = isFlowchart ? normalizeFlowchart(body) : readable(body);
-  // Written order keeps a loop from moving the start, but misplaces groups.
-  const hasGroups = /^\s*subgraph\s|\{\s*$/m.test(drawable);
-  globalThis.cycleBreaking = isFlowchart && !hasGroups ? 'MODEL_ORDER' : 'GREEDY';
   const svg = unmask(
     flatten(
       renderMermaidSVG(drawable, {

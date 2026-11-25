@@ -73,7 +73,10 @@ const className = (name) => name.replace(/\W/g, '_');
 // A fill with no text color keeps the theme's, which may not be readable on it.
 function readableProps(props) {
   const fill = /(?:^|,)\s*fill\s*:\s*#([0-9a-f]{3}|[0-9a-f]{6})\b/i.exec(props)?.[1];
-  if (!fill || /(?:^|,)\s*color\s*:/i.test(props)) return props;
+  if (/(?:^|,)\s*color\s*:/i.test(props)) return props;
+  // A named fill's brightness is unknown: the theme's own is readable.
+  if (!fill)
+    return props.replace(/(^|,)\s*fill\s*:[^,]*/i, '').replace(/^,/, '') || 'stroke-width:1px';
   const hex = fill.length === 3 ? [...fill].map((c) => c + c).join('') : fill;
   const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
   const isLight = 0.299 * r + 0.587 * g + 0.114 * b > 140;
@@ -141,6 +144,7 @@ export function normalizeFlowchart(source) {
   }
 
   const lines = source
+    .replace(/^(\s*(?:graph|flowchart)\s+\w+)\s*;[ \t]*(?=\S)/i, '$1\n')
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line !== '' && !line.startsWith('%%'));
