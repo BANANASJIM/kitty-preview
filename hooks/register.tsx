@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code';
 import { IMAGE, pathsIn, segmentsOf } from './parse';
 
 const CARD = { maxColumns: 90, textRows: 16, imageRows: 14, readBytes: 8192, dirEntries: 14 };
-const INLINE = { maxColumns: 100, maxRows: 24 };
+const INLINE = { maxRows: 24 };
 const CHIPS = 6;
 const REMEMBERED = 4000;
 const REPLY_INDENT = 2;
@@ -18,6 +18,7 @@ const WRITING_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit']);
 const FILE_TOOLS = new Set(['Read', ...WRITING_TOOLS]);
 
 type Picture = { file: string; columns: number; rows: number };
+type Drawn = Picture | { notice: string };
 type Preview =
   | { kind: 'text'; path: string; name: string; body: string }
   | { kind: 'image'; path: string; name: string; picture: Picture };
@@ -242,7 +243,7 @@ function inlineImage(
   path: string,
   alt: string,
 ) {
-  const maxColumns = Math.min(INLINE.maxColumns, columns - REPLY_INDENT - 2);
+  const maxColumns = columns - REPLY_INDENT - 2;
   const picture = once($, `image\0${path}\0${maxColumns}\0${site}`, () =>
     pictureOf($, path, maxColumns, INLINE.maxRows),
   );
@@ -299,10 +300,10 @@ export const register: Register = (on) => {
     const { Box, Text, Image, Markdown } = $.ui.resolve(e);
     const columns = e.viewport?.columns ?? FALLBACK_COLUMNS;
     const drawing: Drawing = { Box, Text, Image, columns };
-    const maxColumns = Math.min(INLINE.maxColumns, columns - REPLY_INDENT - 2);
+    const maxColumns = columns - REPLY_INDENT - 2;
 
     const parts = segmentsOf(e.props.text).map((segment) => {
-      const picture =
+      const drawn: Drawn | undefined =
         segment.kind === 'mermaid'
           ? once($, `mermaid\0${segment.source}\0${maxColumns}`, () =>
               render($, {
@@ -310,7 +311,7 @@ export const register: Register = (on) => {
                 source: segment.source,
                 maxColumns,
                 maxRows: INLINE.maxRows * 2,
-              }),
+              }).catch((error: Error) => ({ notice: error.message.replace(/^mermaid: /, '') })),
             )
           : segment.kind === 'image'
             ? once($, `image\0${segment.path}\0${maxColumns}\0${e.requestId}`, () =>
@@ -320,11 +321,12 @@ export const register: Register = (on) => {
       return {
         text: segment.text,
         alt: segment.kind === 'image' ? segment.alt : 'mermaid',
-        picture,
+        picture: drawn && 'file' in drawn ? drawn : undefined,
+        notice: drawn && 'notice' in drawn ? drawn.notice : undefined,
       };
     });
     const footer = chips($, drawing, e.requestId, pathsIn(e.props.text));
-    if (!parts.some((part) => part.picture)) {
+    if (!parts.some((part) => part.picture || part.notice)) {
       const own = await next(e);
       return footer ? (
         <Box flexDirection="column">
@@ -336,7 +338,7 @@ export const register: Register = (on) => {
       );
     }
 
-    const opening = parts[0]?.picture ? undefined : parts.shift();
+    const opening = parts[0]?.picture || parts[0]?.notice ? undefined : parts.shift();
     const first = opening && (await next({ ...e, props: { ...e.props, text: opening.text } }));
     return (
       <Box flexDirection="column">
@@ -345,8 +347,8 @@ export const register: Register = (on) => {
             <Text>{e.props.isFirstOfReply ? BULLET : ' '}</Text>
           </Box>
         )}
-        {parts.map(({ text, alt, picture }) => (
-          <Box paddingLeft={REPLY_INDENT} marginTop={1}>
+        {parts.map(({ text, alt, picture, notice }) => (
+          <Box paddingLeft={REPLY_INDENT} marginTop={1} flexDirection="column">
             {picture ? (
               <Image
                 source={{ file: picture.file, format: 'png' }}
@@ -357,6 +359,7 @@ export const register: Register = (on) => {
             ) : (
               <Markdown text={text} />
             )}
+            {notice && <Text dimColor>{`diagram not drawn: ${notice}`}</Text>}
           </Box>
         ))}
         {footer}
@@ -368,7 +371,7 @@ export const register: Register = (on) => {
     if (e.surface !== 'terminal' || e.props.origin.kind === 'task-notification') return next(e);
     const { Box, Text, Image } = $.ui.resolve(e);
     const drawing: Drawing = { Box, Text, Image, columns: e.viewport?.columns ?? FALLBACK_COLUMNS };
-    const maxColumns = Math.min(INLINE.maxColumns, drawing.columns - REPLY_INDENT - 2);
+    const maxColumns = drawing.columns - REPLY_INDENT - 2;
     const pictures = (pasted.get(e.props.text) ?? []).flatMap((base64) => {
       const picture = once($, `pasted\0${base64.length}\0${base64.slice(-64)}\0${maxColumns}`, () =>
         render($, { kind: 'image', base64, maxColumns, maxRows: CARD.imageRows }),

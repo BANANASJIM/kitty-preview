@@ -79,7 +79,11 @@ async function mermaid({ source, colors, cell, maxColumns, maxRows }) {
   const [, w, h] = /viewBox="[\d.-]+ [\d.-]+ ([\d.]+) ([\d.]+)"/.exec(svg);
   const scale = cell[1] / LABEL_LINE_UNITS;
   const fit = box(w * scale, h * scale, { cell, maxColumns, maxRows });
-  if (fit.width / (w * scale) < MIN_SCALE) throw new Error('mermaid: too large to read here');
+  if (fit.width / (w * scale) < MIN_SCALE) {
+    if ((maxRows * cell[1]) / (h * scale) < MIN_SCALE) throw new Error('mermaid: too tall');
+    const needed = Math.ceil((w * scale * MIN_SCALE) / cell[0]);
+    throw new Error(`mermaid: too wide (needs ~${needed} columns)`);
+  }
   const file = named(svg + JSON.stringify(fit));
   if (!existsSync(file)) {
     run(

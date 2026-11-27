@@ -40,10 +40,19 @@ for (const [kind, source] of Object.entries(DRAWN)) {
   });
 }
 
-test('a kind that is not drawn, and a diagram too large, are errors', () => {
+test('a kind that is not drawn, and a diagram too large, are errors that say why', () => {
   assert.ok(diagram('gantt\ntitle x').error);
   const chain = Array.from({ length: 60 }, (_, i) => `n${i}-->n${i + 1}`).join('\n');
-  assert.match(diagram(`graph LR\n${chain}`).error, /too large/);
+  assert.match(diagram(`graph TD\n${chain}`).error, /^mermaid: too tall$/);
+  const wide = Array.from({ length: 12 }, (_, i) => `n${i}-->n${i + 1}`).join('\n');
+  const needed = Number(
+    /too wide \(needs ~(\d+) columns\)/.exec(diagram(`graph LR\n${wide}`).error)[1],
+  );
+  assert.ok(needed > FRAME.maxColumns);
+  assert.equal(
+    render({ kind: 'mermaid', source: `graph LR\n${wide}`, maxColumns: needed }).error,
+    undefined,
+  );
 });
 
 test('comments after a line, a one-line header and hyphenated senders are read', () => {

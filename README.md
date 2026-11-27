@@ -13,7 +13,7 @@ A lightweight [Claude Code](https://code.claude.com) mod for [kitty](https://sw.
 
 ## Features
 
-- **Mermaid**: a closed `mermaid` block in a reply becomes a picture, in kitty's own colors. Flowchart, sequence, state, class, ER and xychart; any other kind, and a diagram too large or not fully readable, stays source.
+- **Mermaid**: a closed `mermaid` block in a reply becomes a picture, in kitty's own colors. Flowchart, sequence, state, class, ER and xychart; any other kind, and a diagram too large or not fully readable, stays source, with a dim line under it saying why (too wide, too tall, or what could not be read). A diagram uses the full width of the window.
 - **Images**: local images in replies (`![alt](path)`), images Claude reads, and images pasted into the prompt are drawn inline. PDFs show their first page.
 - **Hover previews**: files named in a message, or touched by a Read, Edit or Write call, get a card with the head of the file, the picture, or the directory listing.
 

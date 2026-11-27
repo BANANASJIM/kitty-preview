@@ -2,14 +2,14 @@ import { expect, test } from 'claude-code/testing';
 
 const PICTURE = { file: '/run/p.png', columns: 20, rows: 5 };
 
-function host(on: any, files: Record<string, string>) {
+function host(on: any, files: Record<string, string>, answer: object = PICTURE) {
   const ran: { argv: readonly string[]; stdin?: string }[] = [];
   on('process.run', (_: unknown, e: any) => {
     ran.push({ argv: e.argv, stdin: e.init?.stdin ?? e.stdin });
     const stdout =
       e.argv[0] === 'kitty'
         ? '{"bg":"#000000","fg":"#ffffff","accent":"#00ffff","cell":[10,20]}'
-        : JSON.stringify(PICTURE);
+        : JSON.stringify(answer);
     return {
       value: {
         exitCode: 0,
@@ -27,14 +27,14 @@ function host(on: any, files: Record<string, string>) {
   return ran;
 }
 
-const reply = (text: string) =>
+const reply = (text: string, columns = 60) =>
   ({
     plugin: 'kitty-preview',
     surface: 'terminal',
     component: 'AssistantMessage',
     requestId: 'm1',
     props: { text, isFirstOfReply: true },
-    viewport: { columns: 60, rows: 40, isFullscreen: true },
+    viewport: { columns, rows: 40, isFullscreen: true },
   }) as any;
 
 async function settled(ui: any, query: any) {
@@ -51,6 +51,23 @@ test('a mermaid block becomes a picture', async ($, on) => {
   const ui = await $.ui.mount(reply('hi\n\n```mermaid\ngraph LR\nA-->B\n```\n\nbye'));
   expect(await settled(ui, { type: 'Image' })).toBeDefined();
   expect(ran.some((r) => r.stdin?.includes('"fg":"#ffffff"'))).toBe(true);
+  await ui.unmount();
+});
+
+test('a diagram takes the width of the viewport', async ($, on) => {
+  const ran = host(on, {});
+  const ui = await $.ui.mount(reply('```mermaid\ngraph LR\nA-->B\n```', 200));
+  expect(await settled(ui, { type: 'Image' })).toBeDefined();
+  expect(ran.some((r) => r.stdin?.includes('"maxColumns":196'))).toBe(true);
+  await ui.unmount();
+});
+
+test('a diagram that is not drawn stays source, with a line that says why', async ($, on) => {
+  host(on, {}, { error: 'mermaid: too wide (needs ~102 columns)' });
+  const ui = await $.ui.mount(reply('```mermaid\ngraph LR\nA-->B\n```'));
+  const notice = { type: 'Text', text: 'diagram not drawn: too wide (needs ~102 columns)' };
+  expect(await settled(ui, notice)).toBeDefined();
+  expect(await ui.find({ type: 'Image' })).toBeUndefined();
   await ui.unmount();
 });
 
