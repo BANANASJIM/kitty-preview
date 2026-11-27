@@ -13,7 +13,7 @@
 
 ## 功能
 
-- **Mermaid**：回复里写完的 `mermaid` 代码块变成图，颜色跟随 kitty。支持 flowchart、sequence、state、class、ER 和 xychart；其他类型，以及太大或没能完整读懂的图，保留源码。
+- **Mermaid**：回复里写完的 `mermaid` 代码块变成图，颜色跟随 kitty。支持 flowchart、sequence、state、class、ER 和 xychart；其他类型，以及太大或没能完整读懂的图，保留源码，并在下方用一行暗色文字说明原因（太宽、太高或哪里读不懂）。图的宽度跟随窗口。
 - **图片**：回复里的本地图片（`![alt](path)`）、Claude 读取的图片、粘贴进输入框的图片都内嵌显示。PDF 显示首页。
 - **hover 预览**：消息里提到的文件，以及 Read、Edit、Write 碰到的文件，鼠标移上去弹出卡片，显示文件开头、图片或目录列表。
 
